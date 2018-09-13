@@ -109,7 +109,7 @@ function fantasyMap() {
 
   // toggle off loading screen and on menus
   $("#loading, #initial").remove();
-  svg.style("background-color", "#000000");
+  //svg.style("background-color", "#000000"); 
   $("#optionsContainer, #tooltip").show();
   if (localStorage.getItem("disable_click_arrow_tooltip")) {
     tooltip.innerHTML = "";
@@ -222,39 +222,85 @@ function fantasyMap() {
     });
   }
 
-  getSeed(); // get and set random generator seed
-  applyNamesData(); // apply default namesbase on load
-  generate(); // generate map on load
-  applyDefaultStyle(); // apply style on load
-  focusOn(); // based on searchParams focus on point, cell or burg from MFCG
-  invokeActiveZooming(); // to hide what need to be hidden
+  //WEBWORKER - handles all generation 
+  let worker = null
+  if (window.Worker) {
+    worker = new Worker('./src/generate.js')
+    //on message
+    worker.onmessage = function(e) {
+      console.log('Message received from worker')
+      updateWithResult(e.data)
+    }
+  }
+
+  function updateWithResult(result) {
+    //update from result
+      regionsInput.value = result.regions
+      land = result.land
+      diagram = result.diagram
+      cells = result.cells
+      features = result.features
+      polygons = result.polygons
+      //cultures
+      cultures = result.cultures
+      manors = result.manors 
+      states = result.states
+      //main generation
+      //get names
+    calculateChains()
+    getNames()
+    // set extent to map borders + 100px to get infinity world reception
+    drawScaleBar()
+    //draw ocean
+    result.ocean.path.forEach((p,i) => {
+      oceanLayers.append("path").attr("d", p).attr("fill", "#ecf2f9").style("opacity", result.ocean.opacity[i])  
+    })
+    //regraph
+    grid.append("path").attr("d", result.grid.path)
+    //rivers
+    result.rivers.forEach(r=> {
+      rivers.append("path").attr("d", r.d).attr("id", "river"+r.i).attr("data-width", r.w).attr("data-increment", r.inc);  
+    })
+    rivers.selectAll("path").on("click", editRiver);
+    //coast draw
+    drawCoastline()
+    drawRelief()
+    //draw oceans
+    result.achors.forEach(a=>{
+      group.append("use").attr("xlink:href", "#icon-anchor").attr("data-id", a.id)
+        .attr("x", a.x).attr("y", a.y).attr("width", a.size).attr("height", a.size)  
+    })
+    //cultures
+    drawManors()
+    drawRegions()
+    //handle routes
+    result.routes.roads.forEach(r=> roads.append("path").attr("d", r.d).attr("id", "road" + r.id).on("click", editRoute))
+    result.routes.trails.forEach(r=> trails.append("path").attr("d", r.d).attr("id", "road" + r.id).on("click", editRoute))
+    result.routes.searoutes.forEach(r=> searoutes.append("path").attr("d", r.d).attr("id", "road" + r.id).on("click", editRoute))
+    //update voronoi
+    // set extent to map borders + 100px to get infinity world reception
+    voronoi = d3.voronoi().extent([[-1, -1], [graphWidth + 1, graphHeight + 1]])
+    diagram = voronoi(result.points)
+    //update svg
+    icons.selectAll("use").on("click", editIcon);
+      // restore layers if they was turned on
+      if (!$("#toggleHeight").hasClass("buttonoff") && !terrs.selectAll("path").size()) toggleHeight();
+      if (!$("#toggleCultures").hasClass("buttonoff") && !cults.selectAll("path").size()) toggleCultures();
+      closeDialogs();
+      applyDefaultStyle(); // apply style on load
+      //focusOn(); // based on searchParams focus on point, cell or burg from MFCG
+      invokeActiveZooming();
+  }
 
   function generate() {
-    console.group("Random map");
-    console.time("TOTAL");
-    applyMapSize();
-    randomizeOptions();
-    placePoints();
-    calculateVoronoi(points);
-    detectNeighbors();
-    drawScaleBar();
-    defineHeightmap();
-    markFeatures();
-    drawOcean();
-    elevateLakes();
-    resolveDepressionsPrimary();
-    reGraph();
-    resolveDepressionsSecondary();
-    flux();
-    addLakes();
-    drawCoastline();
-    drawRelief();
-    generateCultures();
-    manorsAndRegions();
-    cleanData();
-    console.timeEnd("TOTAL");
-    console.groupEnd("Random map");
+    //post data to worker
+    worker.postMessage({seed,graphWidth,graphHeight,svgWidth,svgHeight})
   }
+
+  //INITIALIZE
+  getSeed(); // get and set random generator seed
+  applyNamesData(); // apply default namesbase on load
+  generate()
 
   // get or generate map seed
   function getSeed() {
@@ -4492,8 +4538,8 @@ function fantasyMap() {
     const capitalLabels = burgLabels.select("#capitals");
     const townIcons = burgIcons.select("#towns");
     const townLabels = burgLabels.select("#towns");
-    const capitalSize = capitalIcons.attr("size") || 1;
-    const townSize = townIcons.attr("size") || 0.5;
+    const capitalSize = capitalIcons.attr("size") || 2;
+    const townSize = townIcons.attr("size") || 1;
     capitalIcons.selectAll("*").remove();
     capitalLabels.selectAll("*").remove();
     townIcons.selectAll("*").remove();
@@ -9063,7 +9109,7 @@ function fantasyMap() {
     overlay.attr("opacity", .8).attr("stroke", "#808080").attr("stroke-width", .5);
 
     // ocean style
-    svg.style("background-color", "#000000");
+    //svg.style("background-color", "#000000");
     ocean.attr("opacity", 1);
     oceanLayers.select("rect").attr("fill", "#53679f");
     oceanLayers.attr("filter", "");
