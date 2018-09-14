@@ -28,18 +28,6 @@ let graphHeight = null
 //handle result
 let result = {}
 
-// apply default namesbase on load - pulled from names.js
-applyNamesData() 
-
-/*
-applyDefaultStyle();
-// apply style on load
-focusOn();
-// based on searchParams focus on point, cell or burg from MFCG
-invokeActiveZooming();
-// to hide what need to be hidden
-*/
-
 // randomize options if randomization is allowed in option
 let options = { 
     regions : {
@@ -524,14 +512,19 @@ function resolveDepressionsSecondary() {
   }
 
 
+// apply default namesbase on load - pulled from names.js
+applyNamesData() 
+
 function generate() {
-  console.group("Random map");
-  console.time("TOTAL");
+  console.group("Generate Random Map");
+  console.time("TOTAL GENERATE");
   //set the voronoi bounds
   // set extent to map borders + 100px to get infinity world reception
   voronoi = d3.voronoi().extent([[-1, -1], [graphWidth + 1, graphHeight + 1]]);
   //randomize the options 
   randomizeOptions()
+  //get names
+  calculateChains()
   //begin voronoi
   placePoints()
   calculateVoronoi(points)
@@ -552,10 +545,11 @@ function generate() {
   //cultures
   generateCultures()
   manorsAndRegions()
+  getNames()
   //clean
   cleanData()
-  console.timeEnd("TOTAL");
-  console.groupEnd("Random map");
+  console.timeEnd("TOTAL GENERATE");
+  console.groupEnd("Generate Random Map");
 }
 
 //HELPER FUNCTIONS
@@ -636,11 +630,11 @@ onmessage = function(e) {
   cells = [], land = [], riversData = [], manors = [], states = [], features = [], queue = [];
   let data = e.data
   //set graph
-  graphWidth = data.graphWidth
-  graphHeight = data.graphHeight
+  //size has to be the same for the same map every time with the same seed
+  graphWidth = 1200 //data.graphWidth
+  graphHeight = 1000 //data.graphHeight
   //set seed
   seed = data.seed || Math.floor(Math.random() * 1e9)
-  console.log(" seed: " + seed)
   //seed math random
   Math.seedrandom(seed)
   // generate map on load
@@ -663,6 +657,7 @@ onmessage = function(e) {
     trails : trails, 
     searoutes : searoutes
   }
+  result.options = options
   //return
   postMessage(result)
 }

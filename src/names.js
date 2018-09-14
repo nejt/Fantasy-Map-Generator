@@ -94,31 +94,181 @@
   // get settlement and country names based on option selected
   function getNames() {
     console.time('getNames');
-    // if names source is an external resource
-    if (options.names.input === 1) {
-      const request = new XMLHttpRequest();
-      const url = "https://archivist.xalops.com/archivist-core/api/name/settlement?count=";
-      request.open("GET", url+manors.length, true);
-      request.onload = function() {
-        const names = JSON.parse(request.responseText);
-        for (let i=0; i < manors.length; i++) {
-          manors[i].name = names[i];
-          burgLabels.select("[data-id='" + i + "']").text(names[i]);
-          if (i < states.length) {
-            states[i].name = generateStateName(i);
-            labels.select("#countries").select("#regionLabel"+i).text(states[i].name);
-          }
-        }
-        console.log(names);
-      }
-      request.send(null);
-    }
-
-    if (options.names.input !== "0") return;
     for (let i=0; i < manors.length; i++) {
       const culture = manors[i].culture;
       manors[i].name = generateName(culture);
       if (i < states.length) states[i].name = generateStateName(i);
     }
     console.timeEnd('getNames');
+  }
+
+  // generate random name using Markov's chain
+  function generateName(culture, base) {
+    if (base === undefined) {
+      if (!cultures[culture]) {
+        console.error("culture " + culture + " is not defined. Will load default cultures and set first culture");
+        generateCultures();
+        culture = 0;
+      }
+      base = cultures[culture].base;
+    }
+    if (!nameBases[base]) {
+      console.error("nameBase " + base + " is not defined. Will load default names data and first base");
+      if (!nameBases[0]) applyDefaultNamesData();
+      base = 0;
+    }
+    const method = nameBases[base].method;
+    const error = function(base) {
+      tip("Names data for base " + nameBases[base].name + " is incorrect. Please fix in Namesbase Editor");
+      editNamesbase();
+    }
+
+    if (method === "selection") {
+      if (nameBase[base].length < 1) {error(base); return;}
+      const rnd = rand(nameBase[base].length - 1);
+      const name = nameBase[base][rnd];
+      return name;
+    }
+
+    const data = chain[base];
+    if (data === undefined || data[" "] === undefined) {error(base); return;}
+    const max = nameBases[base].max;
+    const min = nameBases[base].min;
+    const d = nameBases[base].d;
+    let word = "", variants = data[" "];
+    if (variants === undefined) {error(base); return;};
+    let cur = variants[rand(variants.length - 1)];
+    for (let i=0; i < 21; i++) {
+      if (cur === " " && Math.random() < 0.8) {
+        // space means word end, but we don't want to end if word is too short
+        if (word.length < min) {
+          word = "";
+          variants = data[" "];
+        } else {break;}
+      } else {
+        const l = method === "let-to-syl" && cur.length > 1 ? cur[cur.length - 1] : cur;
+        variants = data[l];
+        // word is getting too long, restart
+        word += cur; // add current el to word
+        if (word.length > max) word = "";
+      }
+      if (variants === undefined) {error(base); return;};
+      cur = variants[rand(variants.length - 1)];
+    }
+    // very rare case, let's just select a random name
+    if (word.length < 2) word = nameBase[base][rand(nameBase[base].length - 1)];
+
+    // do not allow multi-word name if word is foo short or not allowed for culture
+    if (word.includes(" ")) {
+      let words = word.split(" "), parsed;
+      if (Math.random() > nameBases[base].m) {word = words.join("");}
+      else {
+        for (let i=0; i < words.length; i++) {
+          if (words[i].length < 2) {
+            if (!i) words[1] = words[0] + words[1];
+            if (i) words[i-1] = words[i-1] + words[i];
+            words.splice(i, 1);
+        	  i--;
+          }
+        }
+        word = words.join(" ");
+      }
+    }
+
+    // parse word to get a final name
+    const name = [...word].reduce(function(r, c, i, data) {
+      if (c === " ") {
+        if (!r.length) return "";
+        if (i+1 === data.length) return r;
+      }
+      if (!r.length) return c.toUpperCase();
+      if (r.slice(-1) === " ") return r + c.toUpperCase();
+      if (c === data[i-1]) {
+        if (!d.includes(c)) return r;
+        if (c === data[i-2]) return r;
+      }
+      return r + c;
+    }, "");
+    return name;
+  }
+
+  // generate region name
+  function generateStateName(state) {
+    let culture = null;
+    if (states[state]) if(manors[states[state].capital]) culture = manors[states[state].capital].culture;
+    let name = "NameIdontWant";
+    if (Math.random() < 0.85 || culture === null) {
+      // culture is random if capital is not yet defined
+      if (culture === null) culture = rand(cultures.length - 1);
+      // try to avoid too long words as a basename
+      for (let i=0; i < 20 && name.length > 7; i++) {
+        name = generateName(culture);
+      }
+    } else {
+      name = manors[state].name;
+    }
+    const base = cultures[culture].base;
+
+    let addSuffix = false;
+    // handle special cases
+    const e = name.slice(-2);
+    if (base === 5 && (e === "sk" || e === "ev" || e === "ov")) {
+      // remove -sk and -ev/-ov for Ruthenian
+      name = name.slice(0,-2);
+      addSuffix = true;
+    } else if (name.length > 5 && base === 1 && name.slice(-3) === "ton") {
+      // remove -ton ending for English
+      name = name.slice(0,-3);
+      addSuffix = true;
+    } else if (name.length > 6 && name.slice(-4) === "berg") {
+      // remove -berg ending for any
+      name = name.slice(0,-4);
+      addSuffix = true;
+    } else if (base === 12) {
+      // Japanese ends on vowels
+      if (vowels.includes(name.slice(-1))) return name;
+      return name + "u";
+    } else if (base === 10) {
+      // Korean has "guk" suffix
+      if (name.slice(-3) === "guk") return name;
+      if (name.slice(-1) === "g") name = name.slice(0,-1);
+      if (Math.random() < 0.2 && name.length < 7) name = name + "guk"; // 20% for "guk"
+      return name;
+    } else if (base === 11) {
+      // Chinese has "guo" suffix
+      if (name.slice(-3) === "guo") return name;
+      if (name.slice(-1) === "g") name = name.slice(0,-1);
+      if (Math.random() < 0.3 && name.length < 7) name = name + " Guo"; // 30% for "guo"
+      return name;
+    }
+
+    // define if suffix should be used
+    let vowel = vowels.includes(name.slice(-1)); // last char is vowel
+    if (vowel && name.length > 3) {
+      if (Math.random() < 0.85) {
+        if (vowels.includes(name.slice(-2,-1))) {
+          name = name.slice(0,-2);
+          addSuffix = true; // 85% for vv
+        } else if (Math.random() < 0.7) {
+          name = name.slice(0,-1);
+          addSuffix = true; // ~60% for cv
+        }
+      }
+    } else if (Math.random() < 0.6) {
+      addSuffix = true; // 60% for cc and vc
+    }
+
+    if (addSuffix === false) return name;
+    let suffix = "ia"; // common latin suffix
+    const rnd = Math.random();
+    if (rnd < 0.05 && base === 3) suffix = "terra"; // 5% "terra" for Italian
+    else if (rnd < 0.05 && base === 4) suffix = "terra"; // 5% "terra" for Spanish
+    else if (rnd < 0.05 && base == 2) suffix = "terre"; // 5% "terre" for French
+    else if (rnd < 0.5 && base == 0) suffix = "land"; // 50% "land" for German
+    else if (rnd < 0.4 && base == 1) suffix = "land"; // 40% "land" for English
+    else if (rnd < 0.3 && base == 6) suffix = "land"; // 30% "land" for Nordic
+    else if (rnd < 0.1 && base == 7) suffix = "eia"; // 10% "eia" for Greek ("ia" is also Greek)
+    else if (rnd < 0.4 && base == 9) suffix = "maa"; // 40% "maa" for Finnic
+    if (name.slice(-1 * suffix.length) === suffix) return name; // no suffix if name already ends with it
+    return name + suffix;
   }
