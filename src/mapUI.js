@@ -304,9 +304,9 @@ import {drawRelief} from "./drawRelief.js"
   //END DRAG *******************************************************
 
   // toggle off loading screen and on menus
-  $("#mapLayers").sortable({items: "li:not(.solid)", cancel: ".solid", update: moveLayer});
-  $("#templateBody").sortable({items: "div:not(div[data-type='Mountain'])"});
-  $("#mapLayers, #templateBody").disableSelection();
+  //$("#mapLayers").sortable({items: "li:not(.solid)", cancel: ".solid", update: moveLayer});
+  //$("#templateBody").sortable({items: "div:not(div[data-type='Mountain'])"});
+  //$("#mapLayers, #templateBody").disableSelection();
 
   // move layers on mapLayers dragging (jquery sortable)
   function moveLayer(event, ui) {

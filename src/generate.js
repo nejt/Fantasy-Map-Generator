@@ -14,8 +14,8 @@ importScripts('../src/cultures.js')
 var seed, params, voronoi, diagram, polygons, points = [], heights;
 // Common variables
 var modules = {}, customization = 0, history = [], historyStage = 0, elSelected, 
-  autoResize = true, graphSize = 1, cells = [], land = [], riversData = [], manors = [], 
-  states = [], features = [], queue = [], 
+  autoResize = true, graphSize = 1, cells = [], land = [], riversData = [], manors = [], ruins = [], ruinedStates = [], 
+  states = [], features = [], queue = [], cultures = [],
   fonts = ["Almendra+SC", "Georgia", "Times+New+Roman", "Comic+Sans+MS", "Lucida+Sans+Unicode", "Courier+New"];
 //map values
 let graphWidth = null
@@ -26,6 +26,11 @@ let graphHeight = null
       colors20 = d3.scaleOrdinal(d3.schemeCategory20);
 
 //handle result
+let ancientCultures = {
+  cultures : [],
+  tree : null
+}
+
 let result = {}
 
 // randomize options if randomization is allowed in option
@@ -541,9 +546,14 @@ function generate() {
   resolveDepressionsSecondary()
   //flux and water
   flux()
-  addLakes()
+  addLakes();
   //cultures
-  generateCultures()
+  ({cultures, cultureTree} = generateCultures(+options.cultures.input));
+  //ancientCultures
+  let AC = generateCultures()
+  ancientCultures.cultures = AC.cultures
+  ancientCultures.tree = AC.cultureTree
+  //places
   manorsAndRegions()
   getNames()
   //clean
@@ -627,7 +637,12 @@ function rn(v, d) {
 
 onmessage = function(e) {
   console.log('WebWorker generating')
-  cells = [], land = [], riversData = [], manors = [], states = [], features = [], queue = [];
+  cells = [], land = [], riversData = [], manors = [], ruins = [], ruinedStates = [], 
+  states = [], features = [], queue = [], cultures = [],
+  ancientCultures = {
+    cultures : [],
+    tree : null
+  }
   let data = e.data
   //set graph
   //size has to be the same for the same map every time with the same seed
@@ -651,6 +666,12 @@ onmessage = function(e) {
   result.cultures = cultures
   result.manors = manors
   result.states = states
+  //ruins
+  result.ruins = {
+    cultures : ancientCultures.cultures,
+    sites : ruins,
+    states : ruinedStates
+  }
   //routes
   result.routes = {
     roads : roads, 

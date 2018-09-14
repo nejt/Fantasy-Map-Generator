@@ -2,9 +2,9 @@ importScripts('../src/paths.js')
 importScripts('../src/roads.js')
 
 // generate cultures for a new map based on options and namesbase
-  function generateCultures() {
-    const count = +options.cultures.input;
-    cultures = d3.shuffle(defaultCultures).slice(0, count);
+  function generateCultures(n) {
+    const count = n || rand(1,2);
+    let cultures = d3.shuffle(defaultCultures).slice(0, count);
     const centers = d3.range(cultures.length).map(function(d, i) {
       const x = Math.floor(Math.random() * graphWidth * 0.8 + graphWidth * 0.1);
       const y = Math.floor(Math.random() * graphHeight * 0.8 + graphHeight * 0.1);
@@ -12,14 +12,22 @@ importScripts('../src/roads.js')
       cultures[i].center = center;
       return center;
     });
-    cultureTree = d3.quadtree(centers);
+
+    return {cultures, cultureTree:d3.quadtree(centers)} 
   }
 
   function manorsAndRegions() {
     console.group('manorsAndRegions');
     //placing locations
-    rankPlacesGeography()
-    locateCapitals()
+    rankPlacesGeography();
+    //set global
+    let global = locateCapitals(+options.regions.input)
+    manors = global.manors
+    states = global.states
+    //get ruins
+    let allRuins = locateCapitals()
+    ruins = allRuins.manors 
+    ruinedStates = allRuins.states 
     //roads
     generateMainRoads()
     rankPlacesEconomy()
@@ -69,10 +77,14 @@ importScripts('../src/roads.js')
     console.timeEnd('rankPlacesGeography');
   }
 
-  function locateCapitals() {
-    console.time('locateCapitals');
+  function locateCapitals(n) {
+    let ruins = n ? false : true
+    let timeName = ruins ? 'locateRuins' : 'locateCapitals'
+    console.time(timeName);
+    let manors = []
+    let states = []
     // min distance detween capitals
-    const count = +options.regions.input;
+    const count = n || rand(7, 17);
     let spacing = (graphWidth + graphHeight) / 2 / count;
     console.log(" states: " + count);
 
@@ -87,8 +99,8 @@ importScripts('../src/roads.js')
       }
       if (minDist >= spacing) {
         const cell = land[l].index;
-        const closest = cultureTree.find(x, y);
-        const culture = getCultureId(closest);
+        const closest = ruins ? ancientCultures.tree.find(x,y) : cultureTree.find(x, y);
+        const culture = !ruins ? getCultureId(closest) : ancientCultures.cultures.findIndex(c=> c.center[0] === closest[0] && c.center[1] === closest[1]);
         manors.push({i: region, cell, x, y, region, culture});
       }
       if (l === land.length - 1) {
@@ -109,7 +121,9 @@ importScripts('../src/roads.js')
       p.region = i;
       p.culture = m.culture;
     });
-    console.timeEnd('locateCapitals');
+
+    return {manors,states}
+    console.timeEnd(timeName);
   }
 
   //ROADS is part of roads.js

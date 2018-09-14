@@ -95,11 +95,11 @@ class fantasyMap {
     }   
 
     //post data to worker
-    this._worker.postMessage({seed:this._seed,width:this._width,height:this._height})
+    if(this._worker) this._worker.postMessage({seed:this._seed,width:this._width,height:this._height})
   }
 }
 
-let map = new fantasyMap(null,mapUI.UI.drawMap) //168746789
+let map = new fantasyMap(168746789,mapUI.UI.drawMap) //168746789
 
 /*
       //update voronoi
